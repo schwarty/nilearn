@@ -57,6 +57,7 @@ uses.
    :template: class.rst
    
    SearchLight
+   Decoder
 
 .. _decomposition_ref:
 
