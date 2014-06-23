@@ -43,14 +43,21 @@ ESTIMATOR_CATALOG = dict(
 
 
 class Decoder(BaseEstimator):
-    """Popular classifcation and regression stategies for neuroimgaging.
+    """Popular classification and regression strategies for neuroimgaging.
+
+    The `Decoder` object supports classification and regression methods.
+    It implements a model selection scheme that averages the best models
+    within a cross validation loop. The resulting average model is the
+    one used as a classifier or a regressor. The `Decoder` object also
+    leverages the `NiftiMaskers` to provide a direct interface with the
+    nifti files on disk.
 
     Parameters
     -----------
     estimator : str
         The estimator to choose among: 'svc', 'svc_l1', 'logistic',
-        'logistic_l2' and 'ridge_classifier', 'ridge_regression',
-        and 'svr'.
+        'logistic_l2', 'ridge_classifier', 'ridge_regression',
+        and 'svr'. Defaults to 'svc'.
 
     mask: filename, NiImage, NiftiMasker, or MultiNiftiMasker, optional
         Mask to be used on data. If an instance of masker is passed,
@@ -74,8 +81,12 @@ class Decoder(BaseEstimator):
         or have no effect. See scikit-learn documentation for more information.
 
     select_features: int, float, Transformer or None
-        Feature selection argument. Performs an ANOVA if a number is
-        given, 
+        Perform an univariate feature selection based on the Anova F-value for
+        the input data. An integer select features according to the k highest
+        scores, a float according to a percentile of the highest scores.
+        If None no feature selection is performed. A custom feature
+        selection may be applied by passing a Transformer object.
+        Defaults to .2.
 
     classes_to_predict: list or None
         The classes from the target y to predict. Useful when removing
@@ -150,6 +161,28 @@ class Decoder(BaseEstimator):
         self.verbose = verbose
 
     def fit(self, niimgs, y):
+        """Fit the decoder
+
+        Parameters
+        ----------
+        niimgs: list of filenames or NiImages
+            Data on which the mask must be calculated. If this is a list,
+            the affine is considered the same for all.
+
+        y: 1D array-like
+           Target variable to predict. Must have exactly as many elements as
+           3D images in niimg.
+
+        Attributes
+        ----------
+        `mask_img_`: NiImage
+            Mask computed by the masker object.
+        `classes_`: numpy.ndarray
+            Classes to predict. For classification only.
+        `cv_y_true_` : numpy.ndarray
+            Decoder . Same shape as input parameter
+            process_mask_img.
+        """
         # Setup memory, parallel and masker
         if isinstance(self.memory, basestring) or self.memory is None:
             self.memory = Memory(cachedir=self.memory, verbose=self.verbose)
