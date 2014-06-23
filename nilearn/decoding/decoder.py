@@ -20,11 +20,17 @@ from sklearn.svm.bounds import l1_min_c
 from sklearn.metrics import r2_score
 from sklearn.metrics.scorer import check_scoring
 from sklearn.grid_search import ParameterGrid
-from sklearn.cross_validation import check_cv
 from sklearn.base import BaseEstimator
 from sklearn.base import is_classifier
 from sklearn.utils import check_arrays
 from sklearn import clone
+
+try:
+    # scikit-learn < 0.17
+    from sklearn.cross_validation import _check_cv as check_cv
+except ImportError as e:
+    # scikit-learn >= 0.17
+    from sklearn.cross_validation import check_cv
 
 from ..input_data import NiftiMasker, MultiNiftiMasker
 
