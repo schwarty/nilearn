@@ -43,8 +43,85 @@ ESTIMATOR_CATALOG = dict(
 
 
 class Decoder(BaseEstimator):
-    """A high-level Decoder object for neuroimaging.
+    """Popular classifcation and regression stategies for neuroimgaging.
 
+    Parameters
+    -----------
+    estimator : str
+        The estimator to choose among: 'svc', 'svc_l1', 'logistic',
+        'logistic_l2' and 'ridge_classifier', 'ridge_regression',
+        and 'svr'.
+
+    mask: filename, NiImage, NiftiMasker, or MultiNiftiMasker, optional
+        Mask to be used on data. If an instance of masker is passed,
+        then its mask will be used. If no mask is given,
+        it will be computed automatically by a masker with default
+        parameters.
+
+    cv : cross-validation generator, optional
+        A cross-validation generator. If None, a 3-fold cross
+        validation is used for regression or 3-fold stratified
+        cross-validation for classification.
+
+    param_grid : dict of string to sequence, or sequence of such
+        The parameter grid to explore, as a dictionary mapping estimator
+        parameters to sequences of allowed values.
+
+        An empty dict signifies default parameters.
+
+        A sequence of dicts signifies a sequence of grids to search, and is
+        useful to avoid exploring parameter combinations that make no sense
+        or have no effect. See scikit-learn documentation for more information.
+
+    select_features: int, float, Transformer or None
+        Feature selection argument. Performs an ANOVA if a number is
+        given, 
+
+    classes_to_predict: list or None
+        The classes from the target y to predict. Useful when removing
+        classes implies generating new images without the associated
+        volumes. Defaults to None.
+
+    scoring : string or callable, optional
+        The scoring strategy to use. See the scikit-learn documentation
+        If callable, takes as arguments the fitted estimator, the
+        test data (X_test) and the test target (y_test) if y is
+        not None.
+
+    smoothing_fwhm: float, optional
+        If smoothing_fwhm is not None, it gives the size in millimeters of the
+        spatial smoothing to apply to the signal.
+
+    standardize : boolean, optional
+        If standardize is True, the time-series are centered and normed:
+        their variance is put to 1 in the time dimension.
+
+    target_affine: 3x3 or 4x4 matrix, optional
+        This parameter is passed to image.resample_img. Please see the
+        related documentation for details.
+
+    target_shape: 3-tuple of integers, optional
+        This parameter is passed to image.resample_img. Please see the
+        related documentation for details.
+
+    mask_strategy: str
+        pass
+
+    memory: instance of joblib.Memory or string
+        Used to cache the masking process.
+        By default, no caching is done. If a string is given, it is the
+        path to the caching directory.
+
+    memory_level: integer, optional
+        Rough estimator of the amount of memory used by caching. Higher value
+        means more memory for caching.
+
+    n_jobs : int, optional. Default is -1.
+        The number of CPUs to use to do the computation. -1 means
+        'all CPUs'.
+
+    verbose : int, optional
+        Verbosity level. Default is False
     """
 
     def __init__(self, estimator='svc', mask=None, cv=None, param_grid=None,
@@ -52,7 +129,7 @@ class Decoder(BaseEstimator):
                  smoothing_fwhm=None, standardize=True, target_affine=None,
                  target_shape=None, mask_strategy='background',
                  memory=Memory(cachedir=None), memory_level=0, n_jobs=1,
-                 verbose=0
+                 verbose=False,
                  ):
         self.estimator = estimator
         self.mask = mask
@@ -86,11 +163,6 @@ class Decoder(BaseEstimator):
                                       self.memory, self.memory_level)
 
         # Fit masker
-
-        # if self.masker_.mask is None:
-        #     self.masker_.fit(niimgs)
-        # else:
-        #     self.masker_.fit()
         has_mask = self.masker_.mask is None
         self.masker_.fit(niimgs) if has_mask else self.masker_.fit()
         self.mask_img_ = self.masker_.mask_img_
@@ -115,7 +187,7 @@ class Decoder(BaseEstimator):
         if isinstance(self.cv, int) or self.cv is None:
             cv = check_cv(self.cv, X, y, classifier=is_classification_)
         else:
-            cv = _apply_mask_cv(self.cv, select_samples)
+            cv = _apply_select_cv(self.cv, select_samples)
         self.cv_ = cv
         # Train all labels in all folds
         results = parallel(delayed(_parallel_estimate)(
@@ -399,7 +471,7 @@ def _check_estimation(estimator, y, classes_to_predict, scoring):
             classes, select_samples, scoring)
 
 
-def _apply_mask_cv(cv, select_samples):
+def _apply_select_cv(cv, select_samples):
     """Apply select_samples to internal cv loop when
     classes_to_predict is not None.
     """
