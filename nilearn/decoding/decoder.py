@@ -60,9 +60,9 @@ class Decoder(BaseEstimator):
 
     Parameters
     -----------
-    estimator : str
+    estimator : str, optional
         The estimator to choose among: 'svc', 'svc_l1', 'logistic',
-        'logistic_l2', 'ridge_classifier', 'ridge_regression',
+        'logistic_l1', 'ridge_classifier', 'ridge_regression',
         and 'svr'. Defaults to 'svc'.
 
     mask: filename, NiImage, NiftiMasker, or MultiNiftiMasker, optional
@@ -86,7 +86,7 @@ class Decoder(BaseEstimator):
         useful to avoid exploring parameter combinations that make no sense
         or have no effect. See scikit-learn documentation for more information.
 
-    select_features: int, float, Transformer or None
+    select_features: int, float, Transformer or None, optional
         Perform an univariate feature selection based on the Anova F-value for
         the input data. An integer select features according to the k highest
         scores, a float according to a percentile of the highest scores.
@@ -121,8 +121,12 @@ class Decoder(BaseEstimator):
         This parameter is passed to image.resample_img. Please see the
         related documentation for details.
 
-    mask_strategy: str
-        pass
+    mask_strategy: {'background' or 'epi'}, optional
+        The strategy used to compute the mask: use 'background' if your
+        images present a clear homogeneous background, and 'epi' if they
+        are raw EPI images. Depending on this value, the mask will be
+        computed from masking.compute_background_mask or
+        masking.compute_epi_mask. Default is 'background'.
 
     memory: instance of joblib.Memory or string
         Used to cache the masking process.
