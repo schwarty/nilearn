@@ -192,11 +192,20 @@ class Decoder(BaseEstimator):
             Mask computed by the masker object.
         `classes_`: numpy.ndarray
             Classes to predict. For classification only.
+        `coef_`: numpy.ndarray, shape=(n_classes, n_features)
+            Contains the mean of the models weight vector across
+            fold for each class.
+        `std_coef_`: numpy.ndarray, shape=(n_classes, n_features)
+            Contains the standard deviation of the models weight vector across
+            fold for each class.
         `coef_img_`: dict of NiImage
-            Dictionary containing one NiImage per class. Each NiImage
-            is the mean of the models weight vector across folds. In
-            the case of a regression, it contains a single NiImage at
-            the key 'beta'.
+            Dictionary containing `coef_` with class names as keys,
+            and `coef_` transformed in NiImages as values. In the case
+            of a regression, it contains a single NiImage at the key 'beta'.
+        `std_coef_img_`: dict of NiImage
+            Dictionary containing `std_coef_` with class names as keys,
+            and `coef_` transformed in NiImages as values. In the case
+            of a regression, it contains a single NiImage at the key 'beta'.
         `cv_y_true_` : numpy.ndarray
             Ground truth labels for left out samples in inner cross validation.
         `cv_y_pred_` : numpy.ndarray
