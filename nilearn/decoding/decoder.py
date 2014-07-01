@@ -1,4 +1,7 @@
-"""Decoder"""
+"""High-level decoding object that exposes standard classification
+and regression strategies such as SVM, LogisticRegression and Ridge,
+with optional feature selection, and integrated parameter selection.
+"""
 # Authors : Yannick Schwartz
 #
 # License: simplified BSD
@@ -189,9 +192,18 @@ class Decoder(BaseEstimator):
             Mask computed by the masker object.
         `classes_`: numpy.ndarray
             Classes to predict. For classification only.
+        `coef_img_`: dict of NiImage
+            Dictionary containing one NiImage per class. Each NiImage
+            is the mean of the models weight vector across folds. In
+            the case of a regression, it contains a single NiImage at
+            the key 'beta'.
         `cv_y_true_` : numpy.ndarray
-            Decoder . Same shape as input parameter
-            process_mask_img.
+            Ground truth labels for left out samples in inner cross validation.
+        `cv_y_pred_` : numpy.ndarray
+            Predicted labels for left out samples in inner cross validation.
+        `cv_params_`: dict of lists
+            Best point in the parameter grid for each tested fold
+            in the inner cross validation loop.
         """
         # Setup memory, parallel and masker
         if isinstance(self.memory, basestring) or self.memory is None:
