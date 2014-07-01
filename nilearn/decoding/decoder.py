@@ -291,6 +291,7 @@ class Decoder(BaseEstimator):
         self.coef_img_ = {}
         self.std_coef_img_ = {}
         for c, coef, std in zip(classes, self.coef_, self.std_coef_):
+            c = 'beta' if c is None else c
             self.coef_img_[c] = self.masker_.inverse_transform(coef)
             self.std_coef_img_[c] = self.masker_.inverse_transform(std)
         self.is_classification_ = is_classification_
