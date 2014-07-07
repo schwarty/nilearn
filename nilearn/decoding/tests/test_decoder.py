@@ -18,6 +18,7 @@ from sklearn.base import is_classifier
 from ..decoder import Decoder, ESTIMATOR_CATALOG
 from ..._utils.testing import generate_fake_fmri
 from ...input_data import NiftiMasker
+from sklearn.metrics import f1_score
 
 
 def test_decoder_masking():
@@ -37,7 +38,7 @@ def test_decoder_masking():
 
     # with given masker
     masker = NiftiMasker(mask)
-    decoder = Decoder()
+    decoder = Decoder(mask=masker)
     decoder.fit(fmri, y)
     assert_true(hasattr(decoder, 'coef_'))
 
@@ -49,15 +50,24 @@ def test_decoder_classification():
     fmri, mask, y = generate_fake_fmri(
         length=15, n_blocks=3, block_size=4, block_type='classification')
 
+    # Use class names instead of numbers
+    y_map = {
+        0: 'class_one',
+        1: 'class_two',
+        2: 'class_three',
+        3: 'class_four'
+    }
+    y = np.array([y_map.get(v) for v in y])
+
     # Test multi-class and binary classification
     classifiers = [clf for clf in ESTIMATOR_CATALOG
                    if is_classifier(ESTIMATOR_CATALOG[clf])]
     cross_val = [None, ShuffleSplit(y.size, random_state=random_state)]
-    classes_to_predict = [None, [0, 1]]
+    classes_to_predict = [None, ['class_one', 'class_two']]
     select_features = [None, 20, .3]
-    scoring = ['accuracy', 'f1', 'r2']
+    scorings = ['accuracy', 'f1', 'r2']
 
-    for select, cv, classes, in itertools.product(
+    for select, cv, classes in itertools.product(
             select_features, cross_val, classes_to_predict):
 
         decoder = Decoder(classes_to_predict=classes,
@@ -65,28 +75,39 @@ def test_decoder_classification():
                           select_features=select,
                           n_jobs=1)
         decoder.fit(fmri, y)
-
         classes = np.unique(y) if classes is None else classes
 
         assert_true(hasattr(decoder, 'cv_y_pred_'))
         assert_true(hasattr(decoder, 'cv_y_true_'))
-        # assert_true(hasattr(decoder, 'cv_params_'))
+        assert_true(hasattr(decoder, 'cv_params_'))
         assert_true(hasattr(decoder, 'coef_'))
         assert_true(hasattr(decoder, 'coef_img_'))
         assert_equal(sorted(decoder.coef_img_.keys()), sorted(classes))
 
+    # Test decoder for different classifiers
     for classifier in classifiers:
         decoder = Decoder(estimator=classifier)
         decoder.fit(fmri, y)
-        decoder.predict(fmri)
+        decoder.score(fmri, y)
 
+    # Test scoring methods
+    for scoring in scorings:
+        decoder = Decoder(scoring=scoring)
+
+        if scoring in ['accuracy', 'f1']:
+            decoder.fit(fmri, y)
+            decoder.score(fmri, y)
+        else:
+            # Check that r2 scoring raises an error for classification
+            assert_raises(ValueError, decoder.fit, niimgs=fmri, y=y)
+            continue
+
+    # Test _check_feature selection
     decoder = Decoder(select_features=23.)
     assert_raises(ValueError, decoder.fit, niimgs=fmri, y=y)
 
 
 def test_decoder_regression():
-    random_state = 10
-
     # Generate fake fMRI data for regression
     fmri, mask, y = generate_fake_fmri(
         length=15, n_blocks=3, block_size=4, block_type='regression')
