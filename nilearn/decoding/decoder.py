@@ -20,7 +20,8 @@ from sklearn.preprocessing import LabelBinarizer
 from sklearn.feature_selection import SelectPercentile, SelectKBest
 from sklearn.feature_selection import f_classif, f_regression
 from sklearn.svm.bounds import l1_min_c
-from sklearn.metrics import r2_score
+from sklearn.metrics import make_scorer
+from sklearn.metrics import r2_score, f1_score, precision_score, recall_score
 from sklearn.metrics.scorer import check_scoring
 from sklearn.grid_search import ParameterGrid
 from sklearn.base import BaseEstimator
@@ -231,7 +232,7 @@ class Decoder(BaseEstimator):
         # Setup model & cv
         estimator = ESTIMATOR_CATALOG[self.estimator]
         estimation_params = _check_estimation(estimator, y, self.scoring)
-        is_classification_, is_binary, classes_, \
+        is_classification_, self.is_binary_, classes_, \
             classes, self.scoring = estimation_params
         if classes_ is not None:
             self.classes_ = classes_
@@ -261,7 +262,7 @@ class Decoder(BaseEstimator):
             cv_pred.setdefault(c, []).append(best_y['y_pred'])
             cv_true.setdefault(c, []).append(best_y['y_true'])
 
-            if is_binary:
+            if self.is_binary_:
                 other_class = self.classes_[1]
                 cv_pred.setdefault(other_class, []).append(best_y['inverse'])
                 coefs.setdefault(other_class, []).append(-best_coef)
@@ -312,7 +313,7 @@ class Decoder(BaseEstimator):
         return decision_values
 
     def score(self, niimgs, y):
-        return check_scoring(self, self.scoring)(self, niimgs, y)
+        return _check_scorer(self, self.scoring)(self, niimgs, y)
 
 
 def _parallel_estimate(estimator, X, y, train, test, param_grid,
@@ -490,17 +491,19 @@ def _check_estimation(estimator, y, scoring):
         classes = [None]
         classes_ = None
 
-    # Check that the passed scoring does not raise an Exception
-    check_scoring(estimator, scoring)
-
     # Set scoring to a reasonable default
     if scoring is None and is_classification_:
         scoring = 'accuracy'
     elif scoring is None and not is_classification_:
         scoring = 'r2'
 
+    # Check that the passed scoring does not raise an Exception
+    scorer = check_scoring(estimator, scoring)
+
     # Check scoring is for right learning problem
-    is_r2 = check_scoring(estimator, scoring)._score_func is r2_score
+    is_r2 = False
+    if hasattr(scorer, '_score_func') and scorer._score_func is r2_score:
+        is_r2 = True
     if not is_classification_ and not is_r2:
         raise ValueError('Wrong scoring method `%s` for regression' % scoring)
     if is_classification_ and is_r2:
@@ -508,3 +511,15 @@ def _check_estimation(estimator, y, scoring):
                          'for classification' % scoring)
 
     return is_classification_, is_binary, classes_, classes, scoring
+
+
+def _check_scorer(estimator, scoring):
+    """Handle the special case when classification is binary and
+    the scoring method requires a positive label.
+    """
+    needs_pos_label = [f1_score, precision_score, recall_score]
+    scorer = check_scoring(estimator, scoring)
+    if estimator.is_binary_ and scorer._score_func in needs_pos_label:
+        scorer = make_scorer(scorer._score_func,
+                             pos_label=estimator.classes_[0])
+    return scorer
