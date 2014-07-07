@@ -80,6 +80,9 @@ def test_decoder_classification():
         assert_true(hasattr(decoder, 'coef_img_'))
         assert_equal(sorted(decoder.coef_img_.keys()), sorted(classes))
 
+    fmri, mask, y = generate_fake_fmri(
+        length=15, n_blocks=1, block_size=4, block_type='classification')
+
     # Test decoder for different classifiers
     for classifier in classifiers:
         decoder = Decoder(estimator=classifier)
