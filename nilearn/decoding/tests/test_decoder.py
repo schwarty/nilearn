@@ -63,19 +63,15 @@ def test_decoder_classification():
     classifiers = [clf for clf in ESTIMATOR_CATALOG
                    if is_classifier(ESTIMATOR_CATALOG[clf])]
     cross_val = [None, ShuffleSplit(y.size, random_state=random_state)]
-    classes_to_predict = [None, ['class_one', 'class_two']]
     select_features = [None, 20, .3]
     scorings = ['accuracy', 'f1', 'r2']
 
-    for select, cv, classes in itertools.product(
-            select_features, cross_val, classes_to_predict):
-
-        decoder = Decoder(classes_to_predict=classes,
-                          cv=cv,
+    for select, cv in itertools.product(select_features, cross_val):
+        decoder = Decoder(cv=cv,
                           select_features=select,
                           n_jobs=1)
         decoder.fit(fmri, y)
-        classes = np.unique(y) if classes is None else classes
+        classes = np.unique(y)
 
         assert_true(hasattr(decoder, 'cv_y_pred_'))
         assert_true(hasattr(decoder, 'cv_y_true_'))

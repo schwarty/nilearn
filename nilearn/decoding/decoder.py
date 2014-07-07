@@ -97,11 +97,6 @@ class Decoder(BaseEstimator):
         selection may be applied by passing a Transformer object.
         Defaults to .2.
 
-    classes_to_predict: list or None
-        The classes from the target y to predict. Useful when removing
-        classes implies generating new images without the associated
-        volumes. Defaults to None.
-
     scoring : string or callable, optional
         The scoring strategy to use. See the scikit-learn documentation
         If callable, takes as arguments the fitted estimator, the
@@ -149,19 +144,16 @@ class Decoder(BaseEstimator):
     """
 
     def __init__(self, estimator='svc', mask=None, cv=None, param_grid=None,
-                 select_features=.2, classes_to_predict=None, scoring=None,
-                 smoothing_fwhm=None, standardize=True, target_affine=None,
-                 target_shape=None, mask_strategy='background',
-                 memory=Memory(cachedir=None), memory_level=0, n_jobs=1,
-                 verbose=False,
+                 select_features=.2, scoring=None, smoothing_fwhm=None,
+                 standardize=True, target_affine=None, target_shape=None,
+                 mask_strategy='background', memory=Memory(cachedir=None),
+                 memory_level=0, n_jobs=1, verbose=False,
                  ):
         self.estimator = estimator
         self.mask = mask
         self.cv = cv
         self.param_grid = param_grid
         self.select_features = select_features
-        self.classes_to_predict, = check_arrays(classes_to_predict) \
-            if classes_to_predict is not None else (None, )
         self.scoring = scoring
         self.smoothing_fwhm = smoothing_fwhm
         self.standardize = standardize
@@ -238,20 +230,13 @@ class Decoder(BaseEstimator):
 
         # Setup model & cv
         estimator = ESTIMATOR_CATALOG[self.estimator]
-        estimation_params = _check_estimation(estimator, y,
-                                              self.classes_to_predict,
-                                              self.scoring)
+        estimation_params = _check_estimation(estimator, y, self.scoring)
         is_classification_, is_binary, classes_, \
-            classes, select_samples, self.scoring = estimation_params
+            classes, self.scoring = estimation_params
         if classes_ is not None:
             self.classes_ = classes_
-        X = X[select_samples]
-        y = y[select_samples]
 
-        if isinstance(self.cv, int) or self.cv is None:
-            cv = check_cv(self.cv, X, y, classifier=is_classification_)
-        else:
-            cv = _apply_select_cv(self.cv, select_samples)
+        cv = check_cv(self.cv, X, y, classifier=is_classification_)
 
         # Train all labels in all folds
         results = parallel(delayed(_parallel_estimate)(
@@ -483,7 +468,7 @@ def _check_feature_selection(select_features, is_classification):
     return select_features
 
 
-def _check_estimation(estimator, y, classes_to_predict, scoring):
+def _check_estimation(estimator, y, scoring):
     """Check estimation problem, target type and scoring method."""
     is_classification_ = is_classifier(estimator)
     target_type = y.dtype.kind == 'i' or y.dtype.kind == 'S'
@@ -494,20 +479,10 @@ def _check_estimation(estimator, y, classes_to_predict, scoring):
             'chosen estimator is for a %s problem.' % (
                 'classification' if target_type else 'regression',
                 'classification' if is_classification_ else 'regression'))
-    select_samples = np.ones(y.size, dtype='bool')
     if is_classification_:
-        if classes_to_predict is None:
-            classes_ = classes = np.unique(y)
-        else:
-            classes_ = classes = classes_to_predict
-            if np.setdiff1d(classes_, np.unique(y)).size != 0:
-                raise ValueError('Given target name(s) [%s] not in %s' % (
-                    ', '.join(np.setdiff1d(classes_, np.unique(y))),
-                    np.unique(y)))
-            for c in np.setdiff1d(np.unique(y), classes_to_predict):
-                select_samples[y == c] = False
-            # If the problem is binary classification we compute only the
-            # model for one class and flip the signs for the other class
+        classes_ = classes = np.unique(y)
+        # If the problem is binary classification we compute only the
+        # model for one class and flip the signs for the other class
         if len(classes_) == 2:
             classes = classes_[:1]
             is_binary = True
@@ -532,17 +507,4 @@ def _check_estimation(estimator, y, classes_to_predict, scoring):
         raise ValueError('Wrong scoring method `%s` '
                          'for classification' % scoring)
 
-    return (is_classification_, is_binary, classes_,
-            classes, select_samples, scoring)
-
-
-def _apply_select_cv(cv, select_samples):
-    """Apply select_samples to internal cv loop when
-    classes_to_predict is not None.
-    """
-    for train_idx, test_idx in cv:
-        samples_idx = np.where(select_samples)[0]
-        train = np.where(np.in1d(samples_idx, train_idx))[0]
-        test = np.where(np.in1d(samples_idx, test_idx))[0]
-        if train.size != 0 and test.size != 0:
-            yield train, test
+    return is_classification_, is_binary, classes_, classes, scoring
