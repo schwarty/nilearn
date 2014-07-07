@@ -252,7 +252,7 @@ class Decoder(BaseEstimator):
             cv = check_cv(self.cv, X, y, classifier=is_classification_)
         else:
             cv = _apply_select_cv(self.cv, select_samples)
-        self.cv_ = cv
+
         # Train all labels in all folds
         results = parallel(delayed(_parallel_estimate)(
             estimator, X, y, train, test, self.param_grid,
@@ -300,7 +300,7 @@ class Decoder(BaseEstimator):
         self.coef_img_ = {}
         self.std_coef_img_ = {}
         for c, coef, std in zip(classes, self.coef_, self.std_coef_):
-            c = 'beta' if c is None else c
+            c = 'beta_map' if c is None else c
             self.coef_img_[c] = self.masker_.inverse_transform(coef)
             self.std_coef_img_[c] = self.masker_.inverse_transform(std)
         self.is_classification_ = is_classification_
