@@ -120,5 +120,5 @@ def test_decoder_regression():
         decoder = Decoder(estimator=regr)
         decoder.fit(fmri, y)
         assert_true(hasattr(decoder, 'coef_img_'))
-        assert_equal(decoder.coef_img_.keys(), ['beta'])
+        assert_equal(decoder.coef_img_.keys(), ['beta_map'])
         decoder.predict(fmri)
