@@ -69,6 +69,7 @@ def test_decoder_classification():
         assert_true(hasattr(decoder, 'cv_params_'))
         assert_true(hasattr(decoder, 'coef_'))
         assert_true(hasattr(decoder, 'coef_img_'))
+        assert_true(decoder.is_classification_)
         assert_equal(sorted(decoder.coef_img_.keys()), sorted(classes))
 
     fmri, mask, y = generate_fake_fmri(
@@ -137,3 +138,4 @@ def test_decoder_regression():
         assert_true(hasattr(decoder, 'coef_img_'))
         assert_equal(decoder.coef_img_.keys(), ['beta_map'])
         decoder.predict(fmri)
+        assert_true(not decoder.is_classification_)
