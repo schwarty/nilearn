@@ -233,24 +233,27 @@ class Decoder(BaseEstimator):
         X = np.vstack(X) if isinstance(X, tuple) else X
         y, = check_arrays(y)
 
-        # Setup model & cv
+        # Setup model
         estimator = ESTIMATOR_CATALOG[self.estimator]
-        estimation_params = _check_estimation(estimator, y,
-                                              self.scoring, self.pos_label)
-        is_classification_, self.is_binary_, classes_, \
-            classes, self.scoring = estimation_params
+        is_classification_, self.is_binary_, classes_, classes_to_predict = \
+            _check_estimation(estimator, y, self.pos_label)
         if classes_ is not None:
             self.classes_ = classes_
+        self.is_classification_ = is_classification_
 
+        # Raise an error early if something is wrong with the scoring
+        scorer, scoring = _check_scorer(self, self.scoring, self.pos_label, y)
+
+        # Setup cv
         cv = check_cv(self.cv, X, y, classifier=is_classification_)
 
         # Train all labels in all folds
         results = parallel(delayed(_parallel_estimate)(
             estimator, X, y, train, test, self.param_grid,
-            pos_label, is_classification_, self.scoring,
+            pos_label, is_classification_, scoring,
             self.select_features, self.verbose)
             for pos_label, (train, test)
-            in itertools.product(classes, cv))
+            in itertools.product(classes_to_predict, cv))
 
         # Gather results
         coefs = {}
@@ -268,7 +271,8 @@ class Decoder(BaseEstimator):
             cv_true.setdefault(c, []).append(best_y['y_true'])
 
             if self.is_binary_:
-                other_class = self.classes_[1]
+                other_class = np.setdiff1d(
+                    self.classes_, classes_to_predict)[0]
                 cv_pred.setdefault(other_class, []).append(best_y['inverse'])
                 coefs.setdefault(other_class, []).append(-best_coef)
                 intercepts.setdefault(other_class, []).append(-best_intercept)
@@ -279,6 +283,7 @@ class Decoder(BaseEstimator):
             self.cv_y_pred_ = self.classes_[np.argmax(y_prob, axis=1)]
             self.cv_y_true_ = np.hstack(cv_true[cv_true.keys()[0]])
         else:
+            classes = classes_to_predict
             self.cv_y_pred_ = np.vstack([
                 np.hstack(cv_pred[c]) for c in classes]).T.ravel()
             self.cv_y_true_ = np.vstack([
@@ -293,8 +298,6 @@ class Decoder(BaseEstimator):
         for c, coef, std in zip(classes, self.coef_, self.std_coef_):
             c = 'beta_map' if c is None else c
             self.coef_img_[c] = self.masker_.inverse_transform(coef)
-            self.std_coef_img_[c] = self.masker_.inverse_transform(std)
-        self.is_classification_ = is_classification_
 
     def decision_function(self, niimgs):
         """Provide prediction values for new X which can be turned into
@@ -318,7 +321,7 @@ class Decoder(BaseEstimator):
         return decision_values
 
     def score(self, niimgs, y):
-        scorer = _check_scorer(self, self.scoring, self.pos_label)
+        scorer, _ = _check_scorer(self, self.scoring, self.pos_label, y)
         return scorer(self, niimgs, y)
 
 
@@ -334,11 +337,11 @@ def _parallel_estimate(estimator, X, y, train, test, param_grid,
             'predict: y=%s' % y)
 
     y_true = y[test]
-
     if pos_label is not None:
         label_binarizer = LabelBinarizer(pos_label=1, neg_label=-1)
         y = label_binarizer.fit_transform(y == pos_label).ravel()
 
+    scorer = check_scoring(estimator, scoring)
     select_features = _check_feature_selection(select_features,
                                                is_classification)
     if select_features is not None:
@@ -368,14 +371,12 @@ def _parallel_estimate(estimator, X, y, train, test, param_grid,
                 else:
                     y_prob = decision
                     inverse_prob = -decision
-            score = check_scoring(
-                estimator, scoring)(estimator, X_test, y[test])
+            score = scorer(estimator, X_test, y[test])
             if np.all(estimator.coef_ == 0):
                 score = 0
         else:  # regression
             y_prob = estimator.predict(X_test)
-            score = check_scoring(
-                estimator, scoring)(estimator, X_test, y[test])
+            score = scorer(estimator, X_test, y[test])
         if best_score is None or score >= best_score:
             best_score = score
             best_coef = estimator.coef_
@@ -475,7 +476,7 @@ def _check_feature_selection(select_features, is_classification):
     return select_features
 
 
-def _check_estimation(estimator, y, scoring, pos_label):
+def _check_estimation(estimator, y, pos_label):
     """Check estimation problem, target type and scoring method."""
     is_classification_ = is_classifier(estimator)
     target_type = y.dtype.kind == 'i' or y.dtype.kind == 'S'
@@ -487,58 +488,61 @@ def _check_estimation(estimator, y, scoring, pos_label):
                 'classification' if target_type else 'regression',
                 'classification' if is_classification_ else 'regression'))
     if is_classification_:
-        classes_ = classes = np.unique(y)
+        classes_ = classes_to_predict = np.unique(y)
         # If the problem is binary classification we compute only the
         # model for one class and flip the signs for the other class
         if len(classes_) == 2:
-            classes = classes_[:1]
+            if pos_label is not None and pos_label in classes_:
+                classes_to_predict = np.array([pos_label])
+            else:
+                classes_to_predict = classes_[:1]
             is_binary = True
     else:
-        classes = [None]
+        classes_to_predict = [None]
         classes_ = None
 
+    return is_classification_, is_binary, classes_, classes_to_predict
+
+
+def _check_scorer(estimator, scoring, pos_label, y):
+    """Handle the special case when classification is binary and
+    the scoring method requires a positive label.
+    """
+
     # Set scoring to a reasonable default
-    if scoring is None and is_classification_:
+    if scoring is None and estimator.is_classification_:
         scoring = 'accuracy'
-    elif scoring is None and not is_classification_:
+    elif scoring is None and not estimator.is_classification_:
         scoring = 'r2'
 
     # Check that the passed scoring does not raise an Exception
     scorer = check_scoring(estimator, scoring)
+    score_func = scorer._score_func if hasattr(scorer, '_score_func') else None
 
     # Check scoring is for right learning problem
-    is_r2 = False
-    if hasattr(scorer, '_score_func') and scorer._score_func is r2_score:
-        is_r2 = True
-    if not is_classification_ and not is_r2:
+    is_r2 = score_func is r2_score
+    if not estimator.is_classification_ and not is_r2:
         raise ValueError('Wrong scoring method `%s` for regression' % scoring)
-    if is_classification_ and is_r2:
+    if estimator.is_classification_ and is_r2:
         raise ValueError('Wrong scoring method `%s` '
                          'for classification' % scoring)
 
     # Check that pos_label is correctly set if needed
-    if (is_binary and np.array(y).dtype.kind == 'S'
-            and scorer._score_func in REQUIRES_POS_LABEL):
+    if (estimator.is_binary_ and np.array(y).dtype.kind == 'S'
+            and score_func in REQUIRES_POS_LABEL):
 
         if pos_label is None:
             raise ValueError('Decoder must be given a pos_label in '
                              'the case of a binary classification '
                              'with %s scoring metric' % scoring)
-        elif pos_label not in classes_:
+        elif pos_label not in estimator.classes_:
             raise ValueError(
                 'The given pos_label %s is not in the target'
                 'which contains the classes %s and %s' % (
-                    pos_label, classes_[0], classes_[1]))
+                    pos_label, estimator.classes_[0], estimator.classes_[1]))
 
-    return is_classification_, is_binary, classes_, classes, scoring
-
-
-def _check_scorer(estimator, scoring, pos_label):
-    """Handle the special case when classification is binary and
-    the scoring method requires a positive label.
-    """
     scorer = check_scoring(estimator, scoring)
     if estimator.is_binary_ and scorer._score_func in REQUIRES_POS_LABEL:
         scorer = make_scorer(scorer._score_func,
                              pos_label=pos_label)
-    return scorer
+    return scorer, scoring
