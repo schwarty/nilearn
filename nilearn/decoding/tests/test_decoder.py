@@ -50,15 +50,6 @@ def test_decoder_classification():
     fmri, mask, y = generate_fake_fmri(
         length=15, n_blocks=3, block_size=4, block_type='classification')
 
-    # Use class names instead of numbers
-    y_map = {
-        0: 'class_one',
-        1: 'class_two',
-        2: 'class_three',
-        3: 'class_four'
-    }
-    y = np.array([y_map.get(v) for v in y])
-
     # Test multi-class and binary classification
     classifiers = [clf for clf in ESTIMATOR_CATALOG
                    if is_classifier(ESTIMATOR_CATALOG[clf])]
@@ -89,15 +80,40 @@ def test_decoder_classification():
         decoder.fit(fmri, y)
         decoder.score(fmri, y)
 
+    # Use class names instead of numbers
+    y_map = {
+        0: 'class_one',
+        1: 'class_two',
+    }
+    y = np.array([y_map.get(v) for v in y])
+
     # Test scoring methods
     for scoring in scorings:
-        decoder = Decoder(scoring=scoring)
+        if scoring == 'accuracy':
+            decoder = Decoder(scoring=scoring)
+            decoder.fit(fmri, y)
+            decoder.score(fmri, y)
+        elif scoring == 'f1':
+            # requires a pos_label
+            decoder = Decoder(scoring=scoring)
+            assert_raises(ValueError, decoder.fit, niimgs=fmri, y=y)
 
-        if scoring in ['accuracy', 'f1']:
+            # requires a valid pos_label
+            decoder = Decoder(scoring=scoring, pos_label='data_frame')
+            assert_raises(ValueError, decoder.fit, niimgs=fmri, y=y)
+
+            # class_one is valid
+            decoder = Decoder(scoring=scoring, pos_label='class_one')
+            decoder.fit(fmri, y)
+            decoder.score(fmri, y)
+
+            # class_two is valid
+            decoder = Decoder(scoring=scoring, pos_label='class_two')
             decoder.fit(fmri, y)
             decoder.score(fmri, y)
         else:
             # Check that r2 scoring raises an error for classification
+            decoder = Decoder(scoring=scoring)
             assert_raises(ValueError, decoder.fit, niimgs=fmri, y=y)
             continue
 

@@ -51,6 +51,8 @@ ESTIMATOR_CATALOG = dict(
     svr=SVR(kernel='linear'),
 )
 
+REQUIRES_POS_LABEL = [f1_score, precision_score, recall_score]
+
 
 class Decoder(BaseEstimator):
     """Popular classification and regression strategies for neuroimgaging.
@@ -145,16 +147,18 @@ class Decoder(BaseEstimator):
     """
 
     def __init__(self, estimator='svc', mask=None, cv=None, param_grid=None,
-                 select_features=.2, scoring=None, smoothing_fwhm=None,
-                 standardize=True, target_affine=None, target_shape=None,
-                 mask_strategy='background', memory=Memory(cachedir=None),
-                 memory_level=0, n_jobs=1, verbose=False,
+                 select_features=.2, pos_label=None, scoring=None,
+                 smoothing_fwhm=None, standardize=True, target_affine=None,
+                 target_shape=None, mask_strategy='background',
+                 memory=Memory(cachedir=None), memory_level=0,
+                 n_jobs=1, verbose=False,
                  ):
         self.estimator = estimator
         self.mask = mask
         self.cv = cv
         self.param_grid = param_grid
         self.select_features = select_features
+        self.pos_label = pos_label
         self.scoring = scoring
         self.smoothing_fwhm = smoothing_fwhm
         self.standardize = standardize
@@ -231,7 +235,8 @@ class Decoder(BaseEstimator):
 
         # Setup model & cv
         estimator = ESTIMATOR_CATALOG[self.estimator]
-        estimation_params = _check_estimation(estimator, y, self.scoring)
+        estimation_params = _check_estimation(estimator, y,
+                                              self.scoring, self.pos_label)
         is_classification_, self.is_binary_, classes_, \
             classes, self.scoring = estimation_params
         if classes_ is not None:
@@ -313,7 +318,8 @@ class Decoder(BaseEstimator):
         return decision_values
 
     def score(self, niimgs, y):
-        return _check_scorer(self, self.scoring)(self, niimgs, y)
+        scorer = _check_scorer(self, self.scoring, self.pos_label)
+        return scorer(self, niimgs, y)
 
 
 def _parallel_estimate(estimator, X, y, train, test, param_grid,
@@ -469,7 +475,7 @@ def _check_feature_selection(select_features, is_classification):
     return select_features
 
 
-def _check_estimation(estimator, y, scoring):
+def _check_estimation(estimator, y, scoring, pos_label):
     """Check estimation problem, target type and scoring method."""
     is_classification_ = is_classifier(estimator)
     target_type = y.dtype.kind == 'i' or y.dtype.kind == 'S'
@@ -510,16 +516,29 @@ def _check_estimation(estimator, y, scoring):
         raise ValueError('Wrong scoring method `%s` '
                          'for classification' % scoring)
 
+    # Check that pos_label is correctly set if needed
+    if (is_binary and np.array(y).dtype.kind == 'S'
+            and scorer._score_func in REQUIRES_POS_LABEL):
+
+        if pos_label is None:
+            raise ValueError('Decoder must be given a pos_label in '
+                             'the case of a binary classification '
+                             'with %s scoring metric' % scoring)
+        elif pos_label not in classes_:
+            raise ValueError(
+                'The given pos_label %s is not in the target'
+                'which contains the classes %s and %s' % (
+                    pos_label, classes_[0], classes_[1]))
+
     return is_classification_, is_binary, classes_, classes, scoring
 
 
-def _check_scorer(estimator, scoring):
+def _check_scorer(estimator, scoring, pos_label):
     """Handle the special case when classification is binary and
     the scoring method requires a positive label.
     """
-    needs_pos_label = [f1_score, precision_score, recall_score]
     scorer = check_scoring(estimator, scoring)
-    if estimator.is_binary_ and scorer._score_func in needs_pos_label:
+    if estimator.is_binary_ and scorer._score_func in REQUIRES_POS_LABEL:
         scorer = make_scorer(scorer._score_func,
-                             pos_label=estimator.classes_[0])
+                             pos_label=pos_label)
     return scorer
