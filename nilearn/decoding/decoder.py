@@ -446,7 +446,7 @@ def _check_param_grid(estimator, X, y, param_grid):
         # define loss function
         if isinstance(estimator, LogisticRegression):
             loss = 'log'
-        elif isinstance(estimator, (LinearSVC, _BaseRidge)):
+        elif isinstance(estimator, (LinearSVC, _BaseRidge, SVR)):
             loss = 'l2'
         min_c = l1_min_c(X, y, loss=loss) \
             if hasattr(estimator, 'penalty') \
