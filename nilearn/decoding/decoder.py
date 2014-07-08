@@ -477,7 +477,7 @@ def _check_feature_selection(select_features, is_classification):
 
 
 def _check_estimation(estimator, y, pos_label):
-    """Check estimation problem, target type and scoring method."""
+    """Check estimation problem in respect to target type."""
     is_classification_ = is_classifier(estimator)
     target_type = y.dtype.kind == 'i' or y.dtype.kind == 'S'
     is_binary = False
@@ -505,10 +505,12 @@ def _check_estimation(estimator, y, pos_label):
 
 
 def _check_scorer(estimator, scoring, pos_label, y):
-    """Handle the special case when classification is binary and
-    the scoring method requires a positive label.
-    """
+    """Utility function to set up scoring metric.
 
+    Check that metric is valid for the learning problem.
+    Make use of pos_label when classification is binary
+    and scoring method requires it.
+    """
     # Set scoring to a reasonable default
     if scoring is None and estimator.is_classification_:
         scoring = 'accuracy'
