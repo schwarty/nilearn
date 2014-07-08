@@ -524,10 +524,10 @@ def _check_scorer(estimator, scoring, pos_label, y):
     # Check scoring is for right learning problem
     is_r2 = score_func is r2_score
     if not estimator.is_classification_ and not is_r2:
-        raise ValueError('Wrong scoring method `%s` for regression' % scoring)
+        raise ValueError('Wrong scoring method `%s` for regression.' % scoring)
     if estimator.is_classification_ and is_r2:
         raise ValueError('Wrong scoring method `%s` '
-                         'for classification' % scoring)
+                         'for classification.' % scoring)
 
     # Check that pos_label is correctly set if needed
     if (estimator.is_binary_ and np.array(y).dtype.kind == 'S'
@@ -536,11 +536,11 @@ def _check_scorer(estimator, scoring, pos_label, y):
         if pos_label is None:
             raise ValueError('Decoder must be given a pos_label in '
                              'the case of a binary classification '
-                             'with %s scoring metric' % scoring)
+                             'with `%s` scoring metric.' % scoring)
         elif pos_label not in estimator.classes_:
             raise ValueError(
-                'The given pos_label %s is not in the target'
-                'which contains the classes %s and %s' % (
+                'The given pos_label `%s` is not in the target '
+                'which contains the classes `%s` and `%s`.' % (
                     pos_label, estimator.classes_[0], estimator.classes_[1]))
 
     scorer = check_scoring(estimator, scoring)
