@@ -100,6 +100,11 @@ class Decoder(BaseEstimator):
         selection may be applied by passing a Transformer object.
         Defaults to .2.
 
+    pos_label: str or None
+        The positive class label in case of a binary classification. It is
+        used in the case of binary classification, and only the following
+        scoring metrics require it: f1, precision, and recall.
+
     scoring : string or callable, optional
         The scoring strategy to use. See the scikit-learn documentation
         If callable, takes as arguments the fitted estimator, the
