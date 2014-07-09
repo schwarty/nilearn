@@ -398,6 +398,9 @@ def _parallel_estimate(estimator, X, y, train, test, param_grid,
 
     if select_features is not None:
         best_coef = select_features.inverse_transform(best_coef)
+    if isinstance(estimator, SVR):
+        best_coef = -best_coef
+
     return pos_label, best_coef, best_intercept, best_y, best_params
 
 
