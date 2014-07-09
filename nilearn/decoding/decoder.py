@@ -9,6 +9,7 @@ with optional feature selection, and integrated parameter selection.
 
 import itertools
 import warnings
+import copy
 
 import numpy as np
 
@@ -239,7 +240,9 @@ class Decoder(BaseEstimator):
         y, = check_arrays(y)
 
         # Setup model
-        estimator = ESTIMATOR_CATALOG[self.estimator]
+        if not isinstance(self.estimator, basestring):
+            warnings.warn('Use a custom estimator at your own risk.')
+        estimator = ESTIMATOR_CATALOG.get(self.estimator, self.estimator)
         is_classification_, self.is_binary_, classes_, classes_to_predict = \
             _check_estimation(estimator, y, self.pos_label)
         if classes_ is not None:
@@ -313,7 +316,7 @@ class Decoder(BaseEstimator):
             X = np.vstack(X)
         X_view = X.view()
         X_view.shape = (X.shape[0], -1)
-        decision_values = X_view.dot(self.coef_.T) + self.intercept_
+        decision_values = np.dot(X_view, self.coef_.T) + self.intercept_
         return decision_values
 
     def predict(self, niimgs):
