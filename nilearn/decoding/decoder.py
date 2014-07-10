@@ -296,6 +296,7 @@ class Decoder(BaseEstimator):
                 np.hstack(cv_pred[c]) for c in classes]).T.ravel()
             self.cv_y_true_ = np.vstack([
                 np.hstack(cv_true[c]) for c in classes]).T.ravel()
+            self.cv_params_['beta'] = self.cv_params_.pop(None)
 
         self.coef_ = np.vstack([np.mean(coefs[c], axis=0) for c in classes])
         self.std_coef_ = np.vstack([np.std(coefs[c], axis=0) for c in classes])
@@ -304,8 +305,9 @@ class Decoder(BaseEstimator):
         self.coef_img_ = {}
         self.std_coef_img_ = {}
         for c, coef, std in zip(classes, self.coef_, self.std_coef_):
-            c = 'beta_map' if c is None else c
+            c = 'beta' if c is None else c
             self.coef_img_[c] = self.masker_.inverse_transform(coef)
+            self.std_coef_img_[c] = self.masker_.inverse_transform(std)
 
     def decision_function(self, niimgs):
         """Provide prediction values for new X which can be turned into
