@@ -27,8 +27,12 @@ from sklearn.metrics.scorer import check_scoring
 from sklearn.grid_search import ParameterGrid
 from sklearn.base import BaseEstimator
 from sklearn.base import is_classifier
-from sklearn.utils import check_arrays
 from sklearn import clone
+
+try:
+    from sklearn.utils import check_arrays as check_array
+except ImportError as e:
+    from sklearn.utils import check_array
 
 try:
     # scikit-learn < 0.17
@@ -230,14 +234,17 @@ class Decoder(BaseEstimator):
                                       self.memory, self.memory_level)
 
         # Fit masker
-        has_mask = self.masker_.mask is None
-        self.masker_.fit(niimgs) if has_mask else self.masker_.fit()
+        if hasattr(self.masker_, 'mask_img_'):
+            self.masker_.fit(niimgs)
+        else:
+            self.masker_.fit()
         self.mask_img_ = self.masker_.mask_img_
 
         # Load data and target
         X = self.masker_.transform(niimgs)
         X = np.vstack(X) if isinstance(X, tuple) else X
-        y, = check_arrays(y)
+        y, = check_array(y)
+
 
         # Setup model
         if not isinstance(self.estimator, basestring):
@@ -287,9 +294,13 @@ class Decoder(BaseEstimator):
 
         if is_classification_:
             classes = self.classes_
-            y_prob = np.vstack([np.hstack(cv_pred[c]) for c in classes]).T
-            self.cv_y_pred_ = self.classes_[np.argmax(y_prob, axis=1)]
-            self.cv_y_true_ = np.hstack(cv_true[cv_true.keys()[0]])
+
+            y_probs = np.array([np.vstack(cv_pred[c]).T for c in classes]).T
+            self.cv_y_pred_ = []
+            for fold in np.arange(y_probs.shape[0]):
+                self.cv_y_pred_.append(self.classes_[
+                    np.argmax(y_probs[fold], axis=1)])
+            self.cv_y_true_ = cv_true[cv_true.keys()[0]]
         else:
             classes = classes_to_predict
             self.cv_y_pred_ = np.vstack([
@@ -400,6 +411,7 @@ def _parallel_estimate(estimator, X, y, train, test, param_grid,
 
     if select_features is not None:
         best_coef = select_features.inverse_transform(best_coef)
+    # if sklearn.__version__ > 1.7
     if isinstance(estimator, SVR):
         best_coef = -best_coef
 
