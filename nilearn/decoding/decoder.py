@@ -234,7 +234,7 @@ class Decoder(BaseEstimator):
                                       self.memory, self.memory_level)
 
         # Fit masker
-        if hasattr(self.masker_, 'mask_img_'):
+        if not hasattr(self.masker_, 'mask_img_'):
             self.masker_.fit(niimgs)
         else:
             self.masker_.fit()
@@ -294,13 +294,9 @@ class Decoder(BaseEstimator):
 
         if is_classification_:
             classes = self.classes_
-
-            y_probs = np.array([np.vstack(cv_pred[c]).T for c in classes]).T
-            self.cv_y_pred_ = []
-            for fold in np.arange(y_probs.shape[0]):
-                self.cv_y_pred_.append(self.classes_[
-                    np.argmax(y_probs[fold], axis=1)])
-            self.cv_y_true_ = cv_true[cv_true.keys()[0]]
+            y_prob = np.vstack([np.hstack(cv_pred[c]) for c in classes]).T
+            self.cv_y_pred_ = self.classes_[np.argmax(y_prob, axis=1)]
+            self.cv_y_true_ = np.hstack(cv_true[cv_true.keys()[0]])
         else:
             classes = classes_to_predict
             self.cv_y_pred_ = np.vstack([
