@@ -97,7 +97,7 @@ class Decoder(BaseEstimator):
         useful to avoid exploring parameter combinations that make no sense
         or have no effect. See scikit-learn documentation for more information.
 
-    select_features: int, float, Transformer or None, optional
+    screening_percentile: int, float, Transformer or None, optional
         Perform an univariate feature selection based on the Anova F-value for
         the input data. An integer select features according to the k highest
         scores, a float according to a percentile of the highest scores.
@@ -157,7 +157,7 @@ class Decoder(BaseEstimator):
     """
 
     def __init__(self, estimator='svc', mask=None, cv=None, param_grid=None,
-                 select_features=.2, pos_label=None, scoring=None,
+                 screening_percentile=20, pos_label=None, scoring=None,
                  smoothing_fwhm=None, standardize=True, target_affine=None,
                  target_shape=None, mask_strategy='background',
                  memory=Memory(cachedir=None), memory_level=0,
@@ -167,7 +167,7 @@ class Decoder(BaseEstimator):
         self.mask = mask
         self.cv = cv
         self.param_grid = param_grid
-        self.select_features = select_features
+        self.screening_percentile = screening_percentile
         self.pos_label = pos_label
         self.scoring = scoring
         self.smoothing_fwhm = smoothing_fwhm
@@ -266,7 +266,7 @@ class Decoder(BaseEstimator):
         results = parallel(delayed(_parallel_estimate)(
             estimator, X, y, train, test, self.param_grid,
             pos_label, is_classification_, scoring,
-            self.select_features, self.verbose)
+            self.screening_percentile, self.verbose)
             for pos_label, (train, test)
             in itertools.product(classes_to_predict, cv))
 
@@ -344,7 +344,7 @@ class Decoder(BaseEstimator):
 
 def _parallel_estimate(estimator, X, y, train, test, param_grid,
                        pos_label, is_classification, scoring,
-                       select_features=None, verbose=0):
+                       screening_percentile=None, verbose=0):
     """Find the best estimator for a fold within a job."""
 
     if is_classification and pos_label is None:
@@ -359,7 +359,7 @@ def _parallel_estimate(estimator, X, y, train, test, param_grid,
         y = label_binarizer.fit_transform(y == pos_label).ravel()
 
     scorer = check_scoring(estimator, scoring)
-    select_features = _check_feature_selection(select_features,
+    select_features = _check_feature_screening(screening_percentile,
                                                is_classification)
     if select_features is not None:
         X_train = select_features.fit_transform(X[train], y[train])
@@ -473,29 +473,20 @@ def _check_param_grid(estimator, X, y, param_grid):
     return param_grid
 
 
-def _check_feature_selection(select_features, is_classification):
-    """Check feature selection method. Turns floats in SelectPercentile
-    objects, integers in SelectKBest objects.
+def _check_feature_screening(screening_percentile, is_classification):
+    """Check feature screening method. Turns floats between 1 and 100 into
+    SelectPercentile objects.
     """
 
-    if not is_classification:
-        f_test = f_regression
-    else:
-        f_test = f_classif
+    f_test = f_classif if is_classification else f_regression
 
-    if isinstance(select_features, int):
-        if select_features <= 1.:
-            raise ValueError("When `select_features` is an integer it "
-                             "needs to be greater than one and smaller "
-                             "or equal to n_features.")
-        return SelectKBest(f_test, select_features)
-    elif isinstance(select_features, float):
-        if select_features > 1.:
-            raise ValueError("When `select_features` is a float it "
-                             "should either be smaller or equal to 1.")
-        return SelectPercentile(f_test, select_features * 100)
-    return select_features
-
+    if isinstance(screening_percentile, (int, float)):
+        if screening_percentile <= 0:
+            raise ValueError("`screening_percentile` must be greater than 0.")
+        elif screening_percentile > 100:
+            raise ValueError("`screening_percentile` must be smaller or equal to 100.")
+        return SelectPercentile(f_test, screening_percentile)
+    # return None if screening_percentile is None or something not understood
 
 def _check_estimation(estimator, y, pos_label):
     """Check estimation problem in respect to target type."""

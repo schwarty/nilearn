@@ -54,12 +54,12 @@ def test_decoder_classification():
     classifiers = [clf for clf in ESTIMATOR_CATALOG
                    if is_classifier(ESTIMATOR_CATALOG[clf])]
     cross_val = [None, ShuffleSplit(y.size, random_state=random_state)]
-    select_features = [None, 20, .3]
+    screening_percentile = [None, 30]
     scorings = ['accuracy', 'f1', 'r2']
 
-    for select, cv in itertools.product(select_features, cross_val):
+    for select, cv in itertools.product(screening_percentile, cross_val):
         decoder = Decoder(cv=cv,
-                          select_features=select,
+                          screening_percentile=select,
                           n_jobs=1)
         decoder.fit(fmri, y)
         classes = np.unique(y)
@@ -119,7 +119,7 @@ def test_decoder_classification():
             continue
 
     # Test _check_feature selection
-    decoder = Decoder(select_features=23.)
+    decoder = Decoder(screening_percentile=101)
     assert_raises(ValueError, decoder.fit, niimgs=fmri, y=y)
 
 
