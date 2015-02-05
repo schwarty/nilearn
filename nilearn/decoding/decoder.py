@@ -421,9 +421,9 @@ def _parallel_estimate(estimator, X, y, train, test, param_grid,
 def _check_masking(mask, smoothing_fwhm, target_affine, target_shape,
                    standardize, mask_strategy, memory, memory_level):
     """Setup a nifti masker."""
-    # Mask is an image, not a masker
+    # mask is an image, not a masker
     if not isinstance(mask, (NiftiMasker, MultiNiftiMasker)):
-        masker = NiftiMasker(mask=mask,
+        masker = NiftiMasker(mask_img=mask,
                              smoothing_fwhm=smoothing_fwhm,
                              target_affine=target_affine,
                              target_shape=target_shape,
@@ -431,7 +431,7 @@ def _check_masking(mask, smoothing_fwhm, target_affine, target_shape,
                              mask_strategy=mask_strategy,
                              memory=memory,
                              memory_level=memory_level, )
-    # Mask is a masker object
+    # mask is a masker object
     else:
         try:
             masker = clone(mask)
